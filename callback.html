@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: #36393f;
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+            background-color: #2f3136;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        .loading {
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Authenticating...</h2>
+        <div class="loading">Please wait while we verify your identity.</div>
+    </div>
+    <script>
+        const CLIENT_ID = '1311872021365260358';
+        const CLIENT_SECRET = 'njBqyxL8stHB0rNpd651cBFtw6t39uP-';
+        const REDIRECT_URI = 'https://zombie367.github.io/ticket-transcripts/callback.html';
+
+        async function handleCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            const state = urlParams.get('state');
+
+            if (!code) {
+                showError('Authentication failed: No code provided');
+                return;
+            }
+
+            try {
+                // Exchange code for token directly
+                const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        client_id: CLIENT_ID,
+                        client_secret: CLIENT_SECRET,
+                        grant_type: 'authorization_code',
+                        code: code,
+                        redirect_uri: REDIRECT_URI
+                    })
+                });
+
+                if (!tokenResponse.ok) {
+                    const error = await tokenResponse.json();
+                    throw new Error(error.error_description || 'Failed to get access token');
+                }
+
+                const tokenData = await tokenResponse.json();
+                localStorage.setItem('discord_token', tokenData.access_token);
+
+                // Get user info
+                const userResponse = await fetch('https://discord.com/api/users/@me', {
+                    headers: {
+                        'Authorization': `Bearer ${tokenData.access_token}`
+                    }
+                });
+
+                if (!userResponse.ok) {
+                    throw new Error('Failed to get user info');
+                }
+
+                const userData = await userResponse.json();
+                localStorage.setItem('discord_user', JSON.stringify(userData));
+
+                // Get the return URL from localStorage or build it from state
+                const returnUrl = localStorage.getItem('return_url');
+                if (returnUrl && returnUrl.includes('id=')) {
+                    window.location.href = returnUrl;
+                } else if (state && state !== 'login') {
+                    // Handle state containing transcript info
+                    const [transcriptId, userId] = state.split('_');
+                    window.location.href = `https://zombie367.github.io/ticket-transcripts/?id=${transcriptId}&userId=${userId}&creator=${userId}`;
+                } else {
+                    // Fallback to home page
+                    window.location.href = 'https://zombie367.github.io/ticket-transcripts/';
+                }
+            } catch (error) {
+                console.error('Auth Error:', error);
+                showError(`Authentication failed: ${error.message}`);
+            }
+        }
+
+        function showError(message) {
+            document.querySelector('.loading').textContent = message;
+            // Add retry button
+            const container = document.querySelector('.container');
+            const retryButton = document.createElement('button');
+            retryButton.textContent = 'Try Again';
+            retryButton.style.cssText = `
+                background: #5865F2;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 4px;
+                margin-top: 15px;
+                cursor: pointer;
+            `;
+            retryButton.onclick = () => window.location.reload();
+            container.appendChild(retryButton);
+        }
+
+        handleCallback();
+    </script>
+</body>
+</html> 
